@@ -1,0 +1,13 @@
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+.venv/
+venv/
+.claude/
+
+# Dados de origem: já migrados para o Supabase, não são mais lidos pelo app.
+# Ficam só localmente como referência/backup.
+*.xlsx
+01.11.Cadastro de Produtos.csv
+BOA.md
+abrir_dashboard.bat

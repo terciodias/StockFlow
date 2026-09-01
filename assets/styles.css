@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.stApp {
+    background-color: #F4F6FB;
+}
+
+#MainMenu, footer, header[data-testid="stHeader"] {
+    visibility: hidden;
+    height: 0;
+}
+
+.block-container {
+    padding-top: 1.2rem;
+    padding-bottom: 2rem;
+    max-width: 1400px;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background-color: #101B3D;
+    min-width: 250px !important;
+}
+section[data-testid="stSidebar"] * {
+    color: #C7CEE6 !important;
+}
+section[data-testid="stSidebar"] .stRadio > label,
+section[data-testid="stSidebar"] label[data-baseweb="radio"] {
+    padding: 2px 0;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label {
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 2px;
+    width: 100%;
+}
+section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+    background-color: #1C2C5C;
+}
+section[data-testid="stSidebar"] hr {
+    border-color: #26305A;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px 18px 4px;
+}
+.sidebar-brand .logo-box {
+    background: #2F6FED;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+.sidebar-brand .brand-title {
+    color: #FFFFFF !important;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1.1;
+}
+.sidebar-brand .brand-sub {
+    color: #7F8AB3 !important;
+    font-size: 11.5px;
+}
+
+.sidebar-footer {
+    margin-top: 24px;
+    background: #17224B;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.sidebar-footer b { color: #FFFFFF !important; }
+
+/* Header */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.page-header h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #131A33;
+    margin: 0;
+}
+.page-header .subtitle {
+    color: #7A8296;
+    font-size: 13px;
+    margin-top: 2px;
+}
+.badge-sync {
+    background: #E8F8EE;
+    color: #178A48;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 20px;
+}
+
+/* Bordered containers used as chart/table cards */
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: #FFFFFF;
+    border-radius: 14px !important;
+    box-shadow: 0 2px 10px rgba(20, 30, 70, 0.06);
+}
+
+section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
+    background: transparent;
+    box-shadow: none;
+}
+
+.section-title {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #262E45;
+    margin-bottom: 2px;
+}
