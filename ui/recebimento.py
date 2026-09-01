@@ -8,6 +8,7 @@ import streamlit as st
 
 from config import STATUS_CONFERENCIA
 from data.cadastros import buscar_nome_produto, carregar_lista
+from data.notas import buscar_nota_esperada, importar_notas_esperadas
 from data.queries import salvar_registro
 from data.recebimento import carregar_recebimentos, proximo_id_recebimento, salvar_item_recebimento
 
@@ -15,6 +16,15 @@ _OPCAO_VAZIA = "— selecionar —"
 _OPCAO_OUTRO = "Outro (digitar)"
 
 _PREFIXOS_PARA_LIMPAR = ("r_", "rqtd_", "rmot_", "rremover_")
+
+
+def _limpar_nota_esperada():
+    st.session_state.nf_esperada_numero = None
+    st.session_state.nf_esperada_itens = {}
+    st.session_state.nf_esperada_unidade = {}
+    st.session_state.nf_esperada_fornecedor = ""
+    st.session_state.pop("msg_nota_encontrada", None)
+    st.session_state.pop("msg_nota_nao_encontrada", None)
 
 
 def _campo_selecao(label, opcoes, key, obrigatorio=True, valor_padrao=None):
@@ -31,23 +41,59 @@ def _campo_selecao(label, opcoes, key, obrigatorio=True, valor_padrao=None):
 
 def _limpar_formulario():
     st.session_state.itens_recebimento = []
+    _limpar_nota_esperada()
     for k in list(st.session_state.keys()):
         if k.startswith(_PREFIXOS_PARA_LIMPAR):
             del st.session_state[k]
 
 
+def _proximo_item_id():
+    st.session_state.setdefault("proximo_item_recebimento_id", 0)
+    item_id = st.session_state.proximo_item_recebimento_id
+    st.session_state.proximo_item_recebimento_id += 1
+    return item_id
+
+
 def _adicionar_produto():
     codigo = st.session_state.get("r_novo_codigo")
     if codigo is not None:
-        st.session_state.setdefault("proximo_item_recebimento_id", 0)
-        item_id = st.session_state.proximo_item_recebimento_id
-        st.session_state.proximo_item_recebimento_id += 1
+        esperado = st.session_state.get("nf_esperada_itens", {})
         st.session_state.itens_recebimento.append({
-            "id": item_id, "codigo_produto": int(codigo),
-            "quantidade_pedida": 0, "quantidade_recebida": 0,
+            "id": _proximo_item_id(), "codigo_produto": int(codigo),
+            "quantidade_pedida": esperado.get(int(codigo), 0),
+            "quantidade_recebida": esperado.get(int(codigo), 0),
             "quantidade_avariada": 0, "observacao_item": "",
         })
     st.session_state.r_novo_codigo = None
+
+
+def _buscar_nota():
+    numero_nf = (st.session_state.get("r_nf") or "").strip()
+    if not numero_nf:
+        return
+    itens = buscar_nota_esperada(numero_nf)
+    if not itens:
+        st.session_state.msg_nota_nao_encontrada = numero_nf
+        return
+
+    st.session_state.nf_esperada_numero = numero_nf
+    st.session_state.nf_esperada_itens = {i["codigo_produto"]: i["quantidade_esperada"] for i in itens}
+    st.session_state.nf_esperada_unidade = {i["codigo_produto"]: i["unidade"] for i in itens}
+
+    codigos_ja_lancados = {i["codigo_produto"] for i in st.session_state.itens_recebimento}
+    for item in itens:
+        if item["codigo_produto"] in codigos_ja_lancados:
+            continue
+        st.session_state.itens_recebimento.append({
+            "id": _proximo_item_id(), "codigo_produto": item["codigo_produto"],
+            "quantidade_pedida": item["quantidade_esperada"],
+            "quantidade_recebida": item["quantidade_esperada"],
+            "quantidade_avariada": 0, "observacao_item": "",
+        })
+
+    st.session_state.nf_esperada_fornecedor = itens[0].get("fornecedor", "")
+    st.session_state.msg_nota_encontrada = len(itens)
+    st.session_state.pop("msg_nota_nao_encontrada", None)
 
 
 def pagina_recebimento():
@@ -56,6 +102,11 @@ def pagina_recebimento():
 
 
 def _formulario_recebimento():
+    if "itens_recebimento" not in st.session_state:
+        st.session_state.itens_recebimento = []
+    if "nf_esperada_numero" not in st.session_state:
+        _limpar_nota_esperada()
+
     if "msg_sucesso_recebimento" in st.session_state:
         st.success(st.session_state.pop("msg_sucesso_recebimento"))
 
@@ -66,6 +117,19 @@ def _formulario_recebimento():
         "</div>",
         unsafe_allow_html=True,
     )
+
+    with st.expander("📤 Importar notas do dia (planilha Entrada Estoque)"):
+        st.caption(
+            "Envie o .xlsx de Entrada Estoque exportado do ERP. Os produtos e quantidades de "
+            "cada nota ficam disponíveis para conferência automática ao digitar o número da NF abaixo."
+        )
+        arquivo = st.file_uploader("Arquivo .xlsx", type=["xlsx"], key="upload_notas", label_visibility="collapsed")
+        if st.button("Importar", key="btn_importar_notas", disabled=arquivo is None):
+            try:
+                resultado = importar_notas_esperadas(arquivo)
+                st.success(f"{resultado['notas']} nota(s) e {resultado['linhas']} produto(s) importados.")
+            except Exception as e:
+                st.error(f"Não consegui importar o arquivo: {e}")
 
     revendas = carregar_lista("revenda")
     fornecedores = carregar_lista("fornecedor")
@@ -84,7 +148,20 @@ def _formulario_recebimento():
             revenda = _campo_selecao("Revenda", revendas, "r_revenda",
                                       valor_padrao=revendas[0] if len(revendas) == 1 else None)
         with col2:
-            numero_nf = st.text_input("Número da NF *", key="r_nf")
+            col_nf, col_buscar = st.columns([3, 1])
+            with col_nf:
+                numero_nf = st.text_input("Número da NF *", key="r_nf")
+            with col_buscar:
+                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                st.button("🔍 Buscar Nota", key="r_buscar_nf", on_click=_buscar_nota)
+
+        if st.session_state.get("msg_nota_encontrada"):
+            n = st.session_state.pop("msg_nota_encontrada")
+            forn = st.session_state.get("nf_esperada_fornecedor", "")
+            st.success(f"Nota encontrada: {n} produto(s) esperados" + (f" — fornecedor {forn}." if forn else "."))
+        if st.session_state.get("msg_nota_nao_encontrada"):
+            nf = st.session_state.pop("msg_nota_nao_encontrada")
+            st.warning(f"Nenhuma nota importada com o número {nf}. Confira manualmente ou importe a planilha do dia acima.")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -112,9 +189,6 @@ def _formulario_recebimento():
 
         status_conferencia = st.selectbox("Status da conferência *", STATUS_CONFERENCIA, key="r_status")
         observacoes_gerais = st.text_area("Observações gerais", key="r_obs", placeholder="Opcional")
-
-    if "itens_recebimento" not in st.session_state:
-        st.session_state.itens_recebimento = []
 
     with st.container(border=True):
         st.markdown("<div class='section-title'>Conferência por produto</div>", unsafe_allow_html=True)
@@ -147,13 +221,25 @@ def _formulario_recebimento():
                     "quantidade_pedida": pedida, "quantidade_recebida": recebida, "quantidade_avariada": avariada,
                 })
 
-                diferenca = recebida - pedida
-                if diferenca < 0:
-                    st.caption(f"🔴 Falta de {abs(diferenca)} unidade(s) em relação ao pedido.")
-                elif diferenca > 0:
-                    st.caption(f"🟡 Sobra de {diferenca} unidade(s) em relação ao pedido.")
+                nf_atual = (numero_nf or "").strip()
+                conferindo_nota = bool(nf_atual) and st.session_state.get("nf_esperada_numero") == nf_atual
+                if conferindo_nota:
+                    esperado = st.session_state.nf_esperada_itens.get(item["codigo_produto"])
+                    unidade = st.session_state.nf_esperada_unidade.get(item["codigo_produto"], "")
+                    if esperado is None:
+                        st.error(f"⚠️ Produto não consta na nota fiscal {nf_atual} — confira o código.")
+                    elif recebida != esperado:
+                        st.error(f"⚠️ Quantidade errada — a nota {nf_atual} espera {esperado} {unidade}, foi informado {recebida}.")
+                    else:
+                        st.caption(f"✅ Confere com a nota fiscal ({esperado} {unidade}).")
                 else:
-                    st.caption("✅ Quantidade recebida confere com o pedido.")
+                    diferenca = recebida - pedida
+                    if diferenca < 0:
+                        st.caption(f"🔴 Falta de {abs(diferenca)} unidade(s) em relação ao pedido.")
+                    elif diferenca > 0:
+                        st.caption(f"🟡 Sobra de {diferenca} unidade(s) em relação ao pedido.")
+                    else:
+                        st.caption("✅ Quantidade recebida confere com o pedido.")
 
                 motivo_avaria = ""
                 if avariada > 0:
